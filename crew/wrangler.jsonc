@@ -1,0 +1,37 @@
+{
+  // Studio site at studio.model.earth: the crew pages (bids on GitHub issues and
+  // Stripe Connect payments) under /crew, the projects hub under /projects, and
+  // the ArtCraft webapp everywhere else. `npm run deploy` assembles ./site and deploys.
+  // Settings come from the env file named in automation/paths.yaml (see .env.example).
+  "name": "studio",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-06",
+  "observability": { "enabled": true },
+  "workers_dev": false,
+  "assets": {
+    "directory": "./site",
+    "binding": "ASSETS",
+    // The Worker routes every request: /crew pages, hub files, then the webapp.
+    "run_worker_first": true,
+    // React Router owns every webapp path that is not a file.
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "studio-crew",
+      // Local dev works with this placeholder. `npm run deploy` creates the database
+      // on the first deploy and writes its id here.
+      "database_id": "6fb57780-f038-439c-8ac0-ef74be1ae5ec",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Settings that aren't secret. Everything else, including CREW_CURRENCY and
+  // CREW_PLATFORM_FEE_PERCENT, comes from the env file as Worker secrets.
+  "vars": {
+    "CREW_BASE_PATH": "/crew",
+    "CREW_HUB_URL": "/projects/hub/"
+  },
+  "routes": [{ "pattern": "studio.model.earth", "custom_domain": true }],
+  "dev": { "port": 4201 }
+}

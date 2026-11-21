@@ -1,0 +1,6 @@
+[submodule "crew/projects"]
+	path = crew/projects
+	url = https://github.com/ModelEarth/projects
+[submodule "crew/localsite"]
+	path = crew/localsite
+	url = https://github.com/ModelEarth/localsite

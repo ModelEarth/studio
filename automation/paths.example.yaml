@@ -1,0 +1,7 @@
+# Where scripts find local env files kept outside the repo.
+# Copied to paths.yaml (not committed) on first use, and updated when a script
+# is given a different path (for example `npm run dev -- --env-file <path>` in crew).
+# A relative path is relative to this automation folder.
+
+# Crew deployment settings (see crew/.env.example).
+crew_env_file: ../../external/crew.env

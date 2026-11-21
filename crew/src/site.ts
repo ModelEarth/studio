@@ -48,22 +48,29 @@ export async function serveSite(request: Request, env: Env): Promise<Response> {
   });
 }
 
-// Sets --studio-top (used by crew/css/studio.css) to where the webapp starts below
-// localsite's header, and keeps it current as the header changes size.
+// Sets --studio-top and --studio-left (used by crew/css/studio.css) to where the webapp
+// starts below localsite's header and right of its left nav, and keeps them current as
+// those open, close and change size.
 const LAYOUT_SCRIPT = `<script>(function () {
   var queued = false;
+  function set(name, value) {
+    var style = document.documentElement.style;
+    if (style.getPropertyValue(name) !== value) style.setProperty(name, value);
+  }
   function place() {
     queued = false;
     var root = document.getElementById("root");
     if (!root) return;
-    var top = Math.max(0, Math.round(root.getBoundingClientRect().top + window.scrollY));
-    document.documentElement.style.setProperty("--studio-top", top + "px");
+    var box = root.getBoundingClientRect();
+    set("--studio-top", Math.max(0, Math.round(box.top + window.scrollY)) + "px");
+    set("--studio-left", Math.max(0, Math.round(box.left + window.scrollX)) + "px");
   }
   function queue() {
     if (!queued) { queued = true; requestAnimationFrame(place); }
   }
-  new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   window.addEventListener("resize", queue);
+  document.addEventListener("transitionend", queue);
 })();</script>`;
 
 async function proxyToWebappDev(request: Request, url: URL, origin: string): Promise<Response> {

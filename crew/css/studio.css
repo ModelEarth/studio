@@ -10,9 +10,10 @@
 }
 
 /* localsite's header (localsite.js?showheader=true) moves the webapp into #main-content
-   below it, but the webapp sizes its layout to the full screen (h-svh) and pins its sidebar
-   to the top. The Worker's page script sets --studio-top to where the webapp now starts,
-   so these fit it into the space below the header. Only applies while localsite wraps it. */
+   below it, and its left nav moves it right, but the webapp sizes its layout to the full
+   screen (h-svh) and pins its sidebar to the top left. The Worker's page script sets
+   --studio-top and --studio-left to where the webapp now starts, so these fit it into the
+   space beside localsite's header and nav. Only applies while localsite wraps it. */
 #main-content > #root .h-svh {
   height: calc(100svh - var(--studio-top, 0px));
 }
@@ -21,4 +22,14 @@
 }
 #main-content > #root .fixed.inset-y-0.h-svh {
   top: var(--studio-top, 0px);
+  left: var(--studio-left, 0px);
+}
+
+/* When localsite's nav panel (#main-nav) is open (#side-nav gets .main-nav, or .main-nav-full
+   with the #side-nav-content icon rail), it already shifts the webapp right, so hide
+   ArtCraft's own sidebar, whose 256px spacer would push the content further. It returns
+   when the panel closes, beside the icon rail if that stays open. The group/peer element
+   holds both the spacer and the fixed sidebar. */
+body:has(#side-nav.main-nav, #side-nav.main-nav-full) #main-content > #root .group.peer.text-sidebar-foreground {
+  display: none;
 }

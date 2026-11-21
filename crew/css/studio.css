@@ -33,3 +33,69 @@
 body:has(#side-nav.main-nav, #side-nav.main-nav-full) #main-content > #root .group.peer.text-sidebar-foreground {
   display: none;
 }
+
+/* Light mode, following localsite's dark mode toggle and Settings. The webapp is drawn in
+   ArtCraft's --st- color variables, set on <html>, and only has a dark set, so the Worker's
+   page script sets data-theme="light" on <html> while localsite is light (body without .dark),
+   and these give it the light colors of ArtCraft's site (getartcraft.com's "blueprint" theme).
+   Without data-theme the webapp keeps its own dark colors. "white" is the ink and "black" the
+   deepest surface, so they swap. .st-keep-dark areas (the pricing cards) stay dark. */
+:root[data-theme="light"] {
+  --st-color-scheme: light;
+  --st-white-rgb: 16 16 20;
+  --st-black-rgb: 255 255 255;
+  --st-text-rgb: 16 16 20;
+  --st-bg-rgb: 242 241 238;
+  --st-panel-rgb: 250 249 247;
+  --st-control-rgb: 255 255 255;
+  --st-sunken-rgb: 233 232 228;
+  --st-scroll-track-rgb: 233 232 228;
+  --st-scroll-thumb-rgb: 196 195 190;
+  --st-accent-300-rgb: 20 78 225;
+  --st-accent-400-rgb: 27 99 245;
+  --st-accent-ink-rgb: 22 89 196;
+  --st-accent-text-rgb: 22 89 196;
+  --st-text-fade: 0.8;
+  --st-icon-filter: none;
+  --st-wordmark-filter: invert(1);
+
+  /* The desktop app's names, read by the shared libs */
+  --st-bg: rgb(242 241 238);
+  --st-fg: rgb(16 16 20);
+  --st-fg-rgb: 16 16 20;
+  --st-divider: rgb(16 16 20 / 0.16);
+  --st-controls-rgb: 16 16 20;
+
+  /* shadcn tokens (HSL), used by the video editor */
+  --background: 45 10% 94%;
+  --foreground: 240 11% 7%;
+  --card: 40 20% 97%;
+  --card-foreground: 240 11% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 11% 7%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 45 7% 90%;
+  --secondary-foreground: 240 11% 7%;
+  --muted: 45 7% 90%;
+  --muted-foreground: 240 4% 38%;
+  --accent: 45 7% 90%;
+  --accent-foreground: 240 11% 7%;
+  --border: 240 11% 7% / 0.16;
+  --input: 240 11% 7% / 0.16;
+  --ring: 217 80% 43%;
+
+  /* Status text (errors, BETA badges ...) in Tailwind's darker shades, readable on paper */
+  --st-rose-200-rgb: 190 18 60; --st-rose-300-rgb: 190 18 60; --st-rose-400-rgb: 190 18 60; --st-rose-500-rgb: 225 29 72; --st-rose-600-rgb: 190 18 60;
+  --st-indigo-200-rgb: 67 56 202; --st-indigo-300-rgb: 67 56 202; --st-indigo-400-rgb: 67 56 202; --st-indigo-500-rgb: 79 70 229; --st-indigo-600-rgb: 67 56 202;
+  --st-red-200-rgb: 185 28 28; --st-red-300-rgb: 185 28 28; --st-red-400-rgb: 185 28 28; --st-red-500-rgb: 220 38 38; --st-red-600-rgb: 185 28 28;
+  --st-blue-200-rgb: 29 78 216; --st-blue-300-rgb: 29 78 216; --st-blue-400-rgb: 29 78 216; --st-blue-500-rgb: 37 99 235; --st-blue-600-rgb: 29 78 216;
+  --st-orange-200-rgb: 194 65 12; --st-orange-300-rgb: 194 65 12; --st-orange-400-rgb: 194 65 12; --st-orange-500-rgb: 234 88 12; --st-orange-600-rgb: 194 65 12;
+  --st-amber-200-rgb: 146 64 14; --st-amber-300-rgb: 146 64 14; --st-amber-400-rgb: 146 64 14; --st-amber-500-rgb: 180 83 9; --st-amber-600-rgb: 146 64 14;
+  --st-green-200-rgb: 21 128 61; --st-green-300-rgb: 21 128 61; --st-green-400-rgb: 21 128 61; --st-green-500-rgb: 22 163 74; --st-green-600-rgb: 21 128 61;
+  --st-emerald-200-rgb: 4 120 87; --st-emerald-300-rgb: 4 120 87; --st-emerald-400-rgb: 4 120 87; --st-emerald-500-rgb: 5 150 105; --st-emerald-600-rgb: 4 120 87;
+  --st-teal-200-rgb: 15 118 110; --st-teal-300-rgb: 15 118 110; --st-teal-400-rgb: 15 118 110; --st-teal-500-rgb: 13 148 136; --st-teal-600-rgb: 15 118 110;
+  --st-cyan-200-rgb: 14 116 144; --st-cyan-300-rgb: 14 116 144; --st-cyan-400-rgb: 14 116 144; --st-cyan-500-rgb: 8 145 178; --st-cyan-600-rgb: 14 116 144;
+  --st-yellow-200-rgb: 133 77 14; --st-yellow-300-rgb: 133 77 14; --st-yellow-400-rgb: 133 77 14; --st-yellow-500-rgb: 161 98 7; --st-yellow-600-rgb: 133 77 14;
+  --st-pink-200-rgb: 190 24 93; --st-pink-300-rgb: 190 24 93; --st-pink-400-rgb: 190 24 93; --st-pink-500-rgb: 219 39 119; --st-pink-600-rgb: 190 24 93;
+  --st-purple-200-rgb: 126 34 206; --st-purple-300-rgb: 126 34 206; --st-purple-400-rgb: 126 34 206; --st-purple-500-rgb: 147 51 234; --st-purple-600-rgb: 126 34 206;
+}

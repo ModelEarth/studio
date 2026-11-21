@@ -148,8 +148,10 @@ The Worker adds these to pages without changing the webapp's or the hub's files
 - localsite's stylesheet and script, `/localsite/css/base.css` and
   `/localsite/js/localsite.js?showheader=true&showsearch=true`, unless the page already loads
   them (the hub's pages do).
-- On webapp pages, `crew/css/studio.css` (served at `/crew/css/studio.css`) and a short
-  script that fits the webapp below localsite's header.
+- On webapp pages, `crew/css/studio.css` (served at `/crew/css/studio.css`) and short
+  scripts that fit the webapp below localsite's header and switch it to light colors while
+  localsite is in light mode (its dark mode toggle or Settings). With no saved choice,
+  localsite and the webapp are dark.
 - On the deployed webapp pages, the account-redirect script described above.
 
 Put further style changes for the webapp in `crew/css/studio.css`.

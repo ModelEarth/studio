@@ -31,9 +31,10 @@ export async function serveSite(request: Request, env: Env): Promise<Response> {
     return Response.redirect(`${accounts}${url.pathname}${url.search}`, 302);
   }
 
+  const pageRequest = withoutRevalidation(request);
   const response = !isStatic && env.WEBAPP_DEV_ORIGIN && isLocalhost(url)
-    ? await proxyToWebappDev(request, url, env.WEBAPP_DEV_ORIGIN)
-    : await env.ASSETS.fetch(request);
+    ? await proxyToWebappDev(pageRequest, url, env.WEBAPP_DEV_ORIGIN)
+    : await env.ASSETS.fetch(pageRequest);
   if (!response.headers.get("content-type")?.startsWith("text/html")) return response;
 
   if (isStatic) {
@@ -44,9 +45,27 @@ export async function serveSite(request: Request, env: Env): Promise<Response> {
   }
   return addToPage(response, {
     headStart: accounts ? accountScript(accounts) : "",
-    headEnd: `<link rel="stylesheet" href="${basePath(env)}/css/studio.css" />\n${LAYOUT_SCRIPT}`,
+    headEnd: `<link rel="stylesheet" href="${basePath(env)}/css/studio.css" />\n${LAYOUT_SCRIPT}\n${THEME_SCRIPT}`,
   });
 }
+
+// Has the webapp follow localsite's light and dark modes (its dark mode toggle and
+// Settings): data-theme="light" on <html> while localsite is light, which
+// crew/css/studio.css gives light colors, and none while dark, the webapp's own look.
+// localsite announces each change with a sitelookchange event. A saved light choice
+// (the sitelook cookie) applies at once, so the page doesn't start dark.
+const THEME_SCRIPT = `<script>(function () {
+  var root = document.documentElement;
+  function apply(dark) {
+    if (dark) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", "light");
+  }
+  var saved = (document.cookie.match(/(?:^|; )sitelook=([^;]*)/) || [])[1];
+  if (saved === "light" || (saved === "computer" && !matchMedia("(prefers-color-scheme: dark)").matches)) apply(false);
+  document.addEventListener("sitelookchange", function (event) {
+    apply(event.detail ? event.detail.dark : document.body.classList.contains("dark"));
+  });
+})();</script>`;
 
 // Sets --studio-top and --studio-left (used by crew/css/studio.css) to where the webapp
 // starts below localsite's header and right of its left nav, and keeps them current as
@@ -73,6 +92,18 @@ const LAYOUT_SCRIPT = `<script>(function () {
   document.addEventListener("transitionend", queue);
 })();</script>`;
 
+// The pages are changed here on the way out, but keep the ETag of the file they came from,
+// so a browser asking whether its copy is still current would be told yes (304) and keep a
+// copy made before the Worker's additions changed. Page requests go out without those
+// questions, and addToPage drops the file's ETag and date.
+function withoutRevalidation(request: Request): Request {
+  if (!request.headers.get("accept")?.includes("text/html")) return request;
+  const page = new Request(request);
+  page.headers.delete("if-none-match");
+  page.headers.delete("if-modified-since");
+  return page;
+}
+
 async function proxyToWebappDev(request: Request, url: URL, origin: string): Promise<Response> {
   const target = new URL(`${url.pathname}${url.search}`, origin);
   try {
@@ -96,6 +127,9 @@ function addToPage(
   let hasLocalsiteCss = false;
   let hasLocalsiteJs = false;
   const missingLocalsite = () => [hasLocalsiteCss ? "" : LOCALSITE_CSS, hasLocalsiteJs ? "" : LOCALSITE_JS];
+  const page = new Response(response.body, response);
+  page.headers.delete("etag");
+  page.headers.delete("last-modified");
   return new HTMLRewriter()
     .on('link[href*="localsite/css/base.css"]', { element() { hasLocalsiteCss = true; } })
     .on('script[src*="localsite/js/localsite.js"]', { element() { hasLocalsiteJs = true; } })
@@ -116,7 +150,7 @@ function addToPage(
         });
       },
     })
-    .transform(response);
+    .transform(page);
 }
 
 // The webapp moves between its pages without reloading, so those moves never reach this

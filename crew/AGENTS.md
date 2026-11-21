@@ -3,15 +3,15 @@
 ## Where to edit
 
 studio is our copy of artcraft-services (upstream: storytold/artcraft-services). In studio,
-limit edits to these folders:
+only edit `crew/` (this folder, the studio site's Worker) and the ModelEarth submodules in it
+that the site serves at the root (listed in `crew/site-folders.json`).
 
-- `crew/`: the studio site's Worker (this folder), including the ModelEarth submodules it
-  serves at the site root (listed in `crew/site-folders.json`)
-- `automation/`: local scripts and `paths.yaml`
-- `support/`
-
-Leave the rest of studio unchanged (Rust backend, frontend, script, root config), so upstream
-changes merge cleanly. Root `.gitmodules` may change only to add or update the crew submodules, kept in alphabetical order.
+Leave the rest of studio unchanged, including `automation/`, `support/`, the Rust backend,
+the frontend, `script/` and the root config, so upstream changes merge cleanly. Read them as
+needed (the webapp's styles, `automation/paths.yaml`), but make changes for the site in
+`crew/` instead, such as webapp styles in `crew/css/studio.css` and page scripts in
+`crew/src/site.ts`. The one exception is root `.gitmodules`, which changes only when a crew
+submodule is added or removed, kept in alphabetical order.
 
 ## The studio site
 

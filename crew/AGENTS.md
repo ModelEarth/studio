@@ -5,27 +5,34 @@
 studio is our copy of artcraft-services (upstream: storytold/artcraft-services). In studio,
 limit edits to these folders:
 
-- `crew/`: the studio site's Worker (this folder), including the `crew/projects` and
-  `crew/localsite` submodules
+- `crew/`: the studio site's Worker (this folder), including the ModelEarth submodules it
+  serves at the site root (listed in `crew/site-folders.json`)
 - `automation/`: local scripts and `paths.yaml`
 - `support/`
 
 Leave the rest of studio unchanged (Rust backend, frontend, script, root config), so upstream
-changes merge cleanly. Root `.gitmodules` may change only to add or update the crew submodules.
+changes merge cleanly. Root `.gitmodules` may change only to add or update the crew submodules, kept in alphabetical order.
 
 ## The studio site
 
 One Cloudflare Worker serves all three on http://localhost:4201, and when deployed at
 https://studio.model.earth:
 
-| Path            | What it serves                                                           |
-|-----------------|--------------------------------------------------------------------------|
-| `/crew/`        | Crew pages: bids on GitHub issues, Stripe Connect payments and tips      |
-| `/projects/`    | The projects hub (`crew/projects` submodule), with Bid and Payment links |
-| `/localsite/`   | localsite (`crew/localsite` submodule), which the hub loads              |
-| everything else | The ArtCraft webapp                                                      |
+| Path              | What it serves                                                           |
+|-------------------|--------------------------------------------------------------------------|
+| `/crew/`          | Crew pages: bids on GitHub issues, Stripe Connect payments and tips      |
+| `/projects/`      | The projects hub (`crew/projects` submodule), with Bid and Payment links |
+| `/localsite/`     | localsite (`crew/localsite` submodule), which the hub loads              |
+| `/engine/`        | ModelEarth `engine` (`crew/engine` submodule)                            |
+| `/keys/`          | ModelEarth `keys` (`crew/keys` submodule)                                |
+| `/profile/`       | ModelEarth `profile` (`crew/profile` submodule)                          |
+| `/project/`       | ModelEarth `project` (`crew/project` submodule)                          |
+| `/realitystream/` | ModelEarth `realitystream` (`crew/realitystream` submodule)              |
+| everything else   | The ArtCraft webapp                                                      |
 
 Locally the Worker forwards webapp paths to the webapp's Vite dev server on 4202.
+The Worker adds localsite's header and `crew/css/studio.css` to pages instead of editing the
+webapp's files; see "Added to every page" in `crew/README.md`.
 Deployed, the webapp is the built app copied into `crew/site`.
 
 Env files stay outside the repo. `automation/paths.yaml` (not committed, created from

@@ -34,6 +34,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   const method = request.method;
 
   if (path === "/health") return new Response("ok");
+  // crew/css, copied into the site (scripts/crew.mjs) and added to the webapp's pages.
+  if (path.startsWith("/css/") && method === "GET") return env.ASSETS.fetch(request);
   // Stripe signs webhooks, so they skip the same-origin form check below.
   if (path === "/webhook" && method === "POST") return stripeWebhook(request, env);
   if (method === "POST" && !isSameOrigin(request)) return new Response("Forbidden", { status: 403 });

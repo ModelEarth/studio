@@ -21,7 +21,13 @@ const WRANGLER_CONFIG = join(CREW_DIR, "wrangler.jsonc");
 const WEBAPP_DIST = join(REPO_DIR, "frontend/apps/artcraft-webapp/dist");
 const SITE_DIR = join(CREW_DIR, "site");
 const DEV_SITE_DIR = join(CREW_DIR, ".wrangler/dev-site");
-const STATIC_FOLDERS = ["projects", "localsite"];
+// Submodules served at the site root (/engine/, /projects/, ...), listed in
+// site-folders.json, which the Worker reads too.
+const SUBMODULES = JSON.parse(readFileSync(join(CREW_DIR, "site-folders.json"), "utf8"));
+// Served path in the site -> folder in crew.
+const SITE_FOLDERS = { ...Object.fromEntries(SUBMODULES.map((folder) => [folder, folder])), "crew/css": "css" };
+// What the site leaves out, as .assetsignore in the site folder.
+const ASSETS_IGNORE = join(CREW_DIR, "site.assetsignore");
 const WEBAPP_DEV_ORIGIN = `http://127.0.0.1:${process.env.WEBAPP_DEV_PORT || 4202}`;
 const PLACEHOLDER_DATABASE_ID = "00000000-0000-0000-0000-000000000000";
 // Never uploaded: local-only settings, and the deploy credentials themselves.
@@ -124,16 +130,17 @@ async function check() {
 // Locally the hub's folders are linked, so edits show without a rebuild.
 function linkDevSite() {
   mkdirSync(DEV_SITE_DIR, { recursive: true });
-  for (const folder of STATIC_FOLDERS) {
-    const link = join(DEV_SITE_DIR, folder);
-    const target = relative(DEV_SITE_DIR, join(CREW_DIR, folder));
+  for (const [served, folder] of Object.entries(SITE_FOLDERS)) {
+    const link = join(DEV_SITE_DIR, served);
+    mkdirSync(dirname(link), { recursive: true });
+    const target = relative(dirname(link), join(CREW_DIR, folder));
     let current = null;
     try { current = readlinkSync(link); } catch {}
     if (current === target) continue;
     if (current !== null) unlinkSync(link);
     symlinkSync(target, link);
   }
-  writeFileSync(join(DEV_SITE_DIR, ".assetsignore"), ".*\nnode_modules\n");
+  cpSync(ASSETS_IGNORE, join(DEV_SITE_DIR, ".assetsignore"));
 }
 
 function site(buildWebapp) {
@@ -148,8 +155,8 @@ function site(buildWebapp) {
   if (existsSync(SITE_DIR)) run("trash", [SITE_DIR]);
 
   cpSync(WEBAPP_DIST, SITE_DIR, { recursive: true });
-  for (const folder of STATIC_FOLDERS) {
-    cpSync(join(CREW_DIR, folder), join(SITE_DIR, folder), {
+  for (const [served, folder] of Object.entries(SITE_FOLDERS)) {
+    cpSync(join(CREW_DIR, folder), join(SITE_DIR, served), {
       recursive: true,
       filter: (source) => !/(^|\/)(\.[^/]+|node_modules)(\/|$)/.test(relative(CREW_DIR, source)),
     });
@@ -161,7 +168,8 @@ function site(buildWebapp) {
     const kept = readFileSync(redirects, "utf8").split("\n").filter((line) => !/^\/\*\s+\/index\.html\s+200/.test(line.trim()));
     writeFileSync(redirects, kept.join("\n"));
   }
-  console.log(`Site ready in ${relative(process.cwd(), SITE_DIR) || "."}: webapp, ${STATIC_FOLDERS.join(", ")}`);
+  cpSync(ASSETS_IGNORE, join(SITE_DIR, ".assetsignore"));
+  console.log(`Site ready in ${relative(process.cwd(), SITE_DIR) || "."}: webapp, ${Object.keys(SITE_FOLDERS).join(", ")}`);
 }
 
 // CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID from the shell, or from
@@ -228,7 +236,7 @@ async function checkLive(url) {
 }
 
 function requireSubmodules() {
-  for (const folder of STATIC_FOLDERS) {
+  for (const folder of SUBMODULES) {
     if (!existsSync(join(CREW_DIR, folder, "index.html")) && !existsSync(join(CREW_DIR, folder, "README.md"))) {
       fail(`crew/${folder} is empty. Run: git submodule update --init crew/${folder}`);
     }

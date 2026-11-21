@@ -1,0 +1,34 @@
+# Kept out of the deployed site and `npm run dev`. Copied to .assetsignore in the
+# site folder (scripts/crew.mjs). Same syntax as .gitignore, and the same exclusions
+# CloudRoot uses for these repos on cloud.model.earth.
+
+# Never published, at any depth: dot-files and dot-folders (.git, .env, ...),
+# node_modules, Rust target folders, private key files and automation's paths.yaml.
+.*
+node_modules
+target
+*.pem
+*.key
+**/paths.yaml
+
+# Source code a static site can't run, and .NET settings files, which can hold
+# database connection strings.
+*.cs
+*.cshtml
+appsettings*.json
+
+# Python virtual environments, at any depth.
+env/
+venv/
+.venv/
+
+# engine's local voice bridge server.
+/engine/server
+
+# project/goals: download cache, full pipeline outputs and Worker source,
+# and model run folders.
+/project/goals/pipeline/cache
+/project/goals/data/records
+/project/goals/worker
+/project/models/report*
+/project/models/params

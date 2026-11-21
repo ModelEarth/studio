@@ -1,0 +1,24 @@
+/* Added to the ArtCraft webapp's pages by the studio Worker (crew/src/site.ts).
+   The webapp's own files stay unchanged. */
+
+/* ArtCraft's API doesn't answer studio.model.earth yet, so loading the model lists fails
+   and the webapp shows its "Couldn't load models" outage notice on the create pages.
+   The Worker's page script marks only that notice, and only on the deployed site,
+   so every other notice, and this one on localhost, still shows. */
+[data-studio-notice="models-outage"] {
+  display: none !important;
+}
+
+/* localsite's header (localsite.js?showheader=true) moves the webapp into #main-content
+   below it, but the webapp sizes its layout to the full screen (h-svh) and pins its sidebar
+   to the top. The Worker's page script sets --studio-top to where the webapp now starts,
+   so these fit it into the space below the header. Only applies while localsite wraps it. */
+#main-content > #root .h-svh {
+  height: calc(100svh - var(--studio-top, 0px));
+}
+#main-content > #root .min-h-svh {
+  min-height: calc(100svh - var(--studio-top, 0px));
+}
+#main-content > #root .fixed.inset-y-0.h-svh {
+  top: var(--studio-top, 0px);
+}

@@ -7,12 +7,17 @@ send them tips and fees.
 Crew is a Cloudflare Worker with a D1 database, deployed at https://studio.model.earth and
 run locally on http://localhost:4201. The one Worker serves the whole site:
 
-| Path            | What it serves                                                          |
-|-----------------|-------------------------------------------------------------------------|
-| `/crew/`        | Crew pages (`CREW_BASE_PATH`)                                           |
-| `/projects/`    | The projects hub, from the `crew/projects` submodule                    |
-| `/localsite/`   | localsite, from the `crew/localsite` submodule, which the hub loads     |
-| everything else | The ArtCraft webapp (Vite on 4202 locally, the built app when deployed) |
+| Path              | What it serves                                                          |
+|-------------------|-------------------------------------------------------------------------|
+| `/crew/`          | Crew pages (`CREW_BASE_PATH`)                                           |
+| `/projects/`      | The projects hub, from the `crew/projects` submodule                    |
+| `/localsite/`     | localsite, from the `crew/localsite` submodule, which the hub loads     |
+| `/engine/`        | ModelEarth `engine`, from the `crew/engine` submodule                   |
+| `/keys/`          | ModelEarth `keys`, from the `crew/keys` submodule                       |
+| `/profile/`       | ModelEarth `profile`, from the `crew/profile` submodule                 |
+| `/project/`       | ModelEarth `project`, from the `crew/project` submodule                 |
+| `/realitystream/` | ModelEarth `realitystream`, from the `crew/realitystream` submodule     |
+| everything else   | The ArtCraft webapp (Vite on 4202 locally, the built app when deployed) |
 
 Crew uses its own Stripe account, separate from the ArtCraft account in storyteller-web, set by
 `STRIPE_CREW_SECRET_KEY` in the crew env file.
@@ -99,6 +104,81 @@ Workers Scripts, D1 and Workers custom domain (model.earth zone) edit access. Th
 
 Set `CREW_ADMIN_GITHUB_LOGINS` to real GitHub logins before deploying. The hub pages the site
 serves get `window.crewBaseUrl = "/crew"`, so their links stay on the same host.
+
+## ArtCraft accounts on studio.model.earth
+
+The webapp's accounts, credits and subscriptions live in ArtCraft's backend
+(`https://api.storyteller.ai`). That API only accepts browser requests from ArtCraft's own
+sites, and ArtCraft's Google sign-in only works there, so sign-up and login fail on
+studio.model.earth ("Failed to fetch", and Google's "Missing required parameter: client_id").
+
+Until ArtCraft allows this site, `ARTCRAFT_ACCOUNTS_URL=https://app.getartcraft.com` in the
+crew env file sends account pages to ArtCraft:
+
+- Opening or moving within the webapp to `/login`, `/signup`, `/set-password`,
+  `/forgot-password`, or a signed-in-only page (`/library`, `/media`, `/video-editor`,
+  `/referrals`, `/onboarding`, `/checkout/...`) goes to the same page on app.getartcraft.com,
+  keeping `?from=` so people land back on the page they wanted, on ArtCraft.
+- The home page, the `create-` pages, `/pricing` and `/welcome` stay on studio.model.earth for
+  previewing. "Continue with Google" is hidden here; it remains on ArtCraft's sign-up page.
+- Localhost is never redirected, since it uses the local backend.
+- The webapp's "Couldn't load models" notice, which here only means ArtCraft's API refused
+  this site, is hidden by `crew/css/studio.css` on the deployed site. Other notices still show.
+
+## Folders served at the site root
+
+`crew/site-folders.json` lists the submodules in `crew/` served at the site root
+(`/engine/`, `/projects/`, ...). The Worker and `scripts/crew.mjs` both read it, and
+`crew/site.assetsignore` keeps files out of the site (dot-files, key files, servers and data
+caches, as on cloud.model.earth). To add another ModelEarth repo, from studio:
+
+```bash
+git submodule add https://github.com/ModelEarth/<name> crew/<name>
+```
+
+then add `<name>` to `crew/site-folders.json`, keep `.gitmodules` in alphabetical order, and
+run `npm run deploy`. Each file must be under Cloudflare's 25 MiB limit, and the whole site
+under 20,000 files.
+
+## Added to every page
+
+The Worker adds these to pages without changing the webapp's or the hub's files
+(`crew/src/site.ts`, and `crew/src/html.ts` for the crew pages):
+
+- localsite's stylesheet and script, `/localsite/css/base.css` and
+  `/localsite/js/localsite.js?showheader=true&showsearch=true`, unless the page already loads
+  them (the hub's pages do).
+- On webapp pages, `crew/css/studio.css` (served at `/crew/css/studio.css`) and a short
+  script that fits the webapp below localsite's header.
+- On the deployed webapp pages, the account-redirect script described above.
+
+Put further style changes for the webapp in `crew/css/studio.css`.
+
+Leave the value empty and run `npm run deploy` to turn this off, once ArtCraft has made the
+changes below.
+
+### Note for ArtCraft
+
+> **Allowing studio.model.earth to use ArtCraft accounts**
+>
+> https://studio.model.earth is a Model.earth site that serves the ArtCraft webapp, built from
+> an unmodified copy of artcraft-services (github.com/ModelEarth/studio), alongside our crew
+> pages and projects hub. Its visitors would sign up for ArtCraft accounts and buy ArtCraft
+> credits and subscriptions through ArtCraft's own API and Stripe account, so every
+> purchase made there is ArtCraft revenue. For now we send sign-up and login to
+> app.getartcraft.com, because two settings only allow ArtCraft's own sites:
+>
+> 1. **API CORS.** Add `https://studio.model.earth` as an allowed origin in
+>    `crates/lib/actix_cors_configs/src/configs/artcraft_webapp.rs` (`add_artcraft_webapp`),
+>    so `https://api.storyteller.ai` answers its requests. Today a preflight from that origin
+>    returns 400, while `https://app.getartcraft.com` gets 200.
+> 2. **Google sign-in.** Add `https://studio.model.earth` to the Authorized JavaScript origins
+>    of the Google OAuth client the webapp uses, and let us build with that client's ID
+>    (`VITE_GOOGLE_CLIENT_ID`, which is public in the built app), so Google sign-ins from
+>    the site are verified by your backend like any other.
+>
+> We make no other changes to the webapp or backend, and can point the site at any
+> ArtCraft API host or referral setup you prefer. Thank you!
 
 ## Pages
 

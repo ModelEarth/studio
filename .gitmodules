@@ -1,6 +1,21 @@
-[submodule "crew/projects"]
-	path = crew/projects
-	url = https://github.com/ModelEarth/projects
+[submodule "crew/engine"]
+	path = crew/engine
+	url = https://github.com/ModelEarth/engine
+[submodule "crew/keys"]
+	path = crew/keys
+	url = https://github.com/ModelEarth/keys
 [submodule "crew/localsite"]
 	path = crew/localsite
 	url = https://github.com/ModelEarth/localsite
+[submodule "crew/profile"]
+	path = crew/profile
+	url = https://github.com/ModelEarth/profile
+[submodule "crew/project"]
+	path = crew/project
+	url = https://github.com/ModelEarth/project
+[submodule "crew/projects"]
+	path = crew/projects
+	url = https://github.com/ModelEarth/projects
+[submodule "crew/realitystream"]
+	path = crew/realitystream
+	url = https://github.com/ModelEarth/realitystream

@@ -1,4 +1,5 @@
 import { basePath, Env } from "./env";
+import { LOCALSITE_CSS, LOCALSITE_JS } from "./site";
 import type { CrewMember } from "./db";
 
 export function esc(value: unknown): string {
@@ -31,6 +32,8 @@ export function page(env: Env, title: string, body: string, user: CrewMember | n
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · Crew</title>
+${LOCALSITE_CSS}
+${LOCALSITE_JS}
 <style>${STYLES}</style>
 </head>
 <body>

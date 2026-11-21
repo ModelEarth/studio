@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   WEBAPP_DEV_ORIGIN?: string;
+  ARTCRAFT_ACCOUNTS_URL?: string;
   CREW_BASE_PATH?: string;
   CREW_CURRENCY?: string;
   CREW_PLATFORM_FEE_PERCENT?: string;

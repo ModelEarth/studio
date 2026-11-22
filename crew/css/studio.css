@@ -25,6 +25,14 @@
   left: var(--studio-left, 0px);
 }
 
+/* ArtCraft's sidebar stays fixed as the page scrolls, so localsite's footer starts to its
+   right instead of under it. --studio-sidebar is the width the sidebar takes, 0 while it
+   is hidden, and the margin follows it as the sidebar collapses and opens. */
+#main-content > #main-footer {
+  margin-left: var(--studio-sidebar, 0px);
+  transition: margin-left 200ms linear;
+}
+
 /* When localsite's nav panel (#main-nav) is open (#side-nav gets .main-nav, or .main-nav-full
    with the #side-nav-content icon rail), it already shifts the webapp right, so hide
    ArtCraft's own sidebar, whose 256px spacer would push the content further. It returns

@@ -49,12 +49,13 @@ export async function serveSite(request: Request, env: Env): Promise<Response> {
   });
 }
 
-// Has the webapp follow localsite's light and dark modes (its dark mode toggle and
-// Settings): data-theme="light" on <html> while localsite is light, which
-// crew/css/studio.css gives light colors, and none while dark, the webapp's own look.
+// Has the webapp and the crew pages follow localsite's light and dark modes (its dark mode
+// toggle and Settings): data-theme="light" on <html> while localsite is light, which
+// crew/css/studio.css and the crew pages' styles (html.ts) give light colors, and none
+// while dark, the webapp's own look.
 // localsite announces each change with a sitelookchange event. A saved light choice
 // (the sitelook cookie) applies at once, so the page doesn't start dark.
-const THEME_SCRIPT = `<script>(function () {
+export const THEME_SCRIPT = `<script>(function () {
   var root = document.documentElement;
   function apply(dark) {
     if (dark) root.removeAttribute("data-theme");
@@ -68,8 +69,9 @@ const THEME_SCRIPT = `<script>(function () {
 })();</script>`;
 
 // Sets --studio-top and --studio-left (used by crew/css/studio.css) to where the webapp
-// starts below localsite's header and right of its left nav, and keeps them current as
-// those open, close and change size.
+// starts below localsite's header and right of its left nav, and --studio-sidebar to the
+// width ArtCraft's sidebar takes (0 while hidden), and keeps them current as those open,
+// close and change size.
 const LAYOUT_SCRIPT = `<script>(function () {
   var queued = false;
   function set(name, value) {
@@ -83,6 +85,8 @@ const LAYOUT_SCRIPT = `<script>(function () {
     var box = root.getBoundingClientRect();
     set("--studio-top", Math.max(0, Math.round(box.top + window.scrollY)) + "px");
     set("--studio-left", Math.max(0, Math.round(box.left + window.scrollX)) + "px");
+    var spacer = root.querySelector(".group.peer.text-sidebar-foreground > div");
+    set("--studio-sidebar", (spacer ? Math.round(spacer.getBoundingClientRect().width) : 0) + "px");
   }
   function queue() {
     if (!queued) { queued = true; requestAnimationFrame(place); }

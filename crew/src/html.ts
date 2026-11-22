@@ -1,5 +1,5 @@
 import { basePath, Env } from "./env";
-import { LOCALSITE_CSS, LOCALSITE_JS } from "./site";
+import { LOCALSITE_CSS, LOCALSITE_JS, THEME_SCRIPT } from "./site";
 import type { CrewMember } from "./db";
 
 export function esc(value: unknown): string {
@@ -34,6 +34,7 @@ export function page(env: Env, title: string, body: string, user: CrewMember | n
 <title>${esc(title)} · Crew</title>
 ${LOCALSITE_CSS}
 ${LOCALSITE_JS}
+${THEME_SCRIPT}
 <style>${STYLES}</style>
 </head>
 <body>
@@ -42,7 +43,9 @@ ${LOCALSITE_JS}
   <div class="account">${account}</div>
 </header>
 <main>
+<div class="content contentpadding">
 ${body}
+</div>
 </main>
 </body>
 </html>`;
@@ -50,8 +53,8 @@ ${body}
 }
 
 const STYLES = `
-:root { --bg: #fff; --fg: #1f2328; --muted: #656d76; --line: #d0d7de; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --card: #f6f8fa; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --line: #30363d; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --card: #161b22; } }
+:root { --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --line: #30363d; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --card: #161b22; }
+:root[data-theme="light"] { --bg: #fff; --fg: #1f2328; --muted: #656d76; --line: #d0d7de; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --card: #f6f8fa; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 header { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
@@ -60,7 +63,6 @@ nav a { margin-right: 16px; }
 .account { display: flex; gap: 12px; align-items: center; }
 .who { display: inline-flex; gap: 6px; align-items: center; }
 .who img { width: 22px; height: 22px; border-radius: 50%; }
-main { max-width: 860px; margin: 0 auto; padding: 16px; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1 { font-size: 22px; margin: 8px 0 4px; }

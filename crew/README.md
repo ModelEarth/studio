@@ -30,8 +30,9 @@ Its hub (`projects/hub/`) shows Bid and Payment links on each issue, on localhos
 
 1. A crew member signs in with GitHub and opens **Bid** on an issue: amount and what they'll deliver.
 2. A site admin (`CREW_ADMIN_GITHUB_LOGINS`) accepts or rejects bids.
-3. The crew member sets up payouts (**Payouts** page), which creates a Stripe Express account
-   on the crew platform and walks them through Stripe onboarding.
+3. The crew member sets up payouts (**Payouts** page) with their email, which creates a Stripe
+   Express account on the crew platform (Accounts v2, as a recipient of transfers) and walks
+   them through Stripe onboarding.
 4. When work is delivered, the crew member adds a link (such as the pull request).
 5. On the **Payment** page, a signed-in user pays the accepted bid, or sends a tip to any crew
    member on that issue. Stripe Checkout takes the payment, keeps `CREW_PLATFORM_FEE_PERCENT`
@@ -62,10 +63,13 @@ Without a GitHub OAuth app, set `CREW_DEV_LOGIN=true` and sign in on localhost w
 1. In the crew Stripe account, turn on **Connect** (Express accounts).
 2. Put the test secret key in `STRIPE_CREW_SECRET_KEY`.
 3. Forward webhooks locally with the Stripe CLI, and put the `whsec_...` it prints in
-   `STRIPE_CREW_WEBHOOK_SECRET`:
+   `STRIPE_CREW_WEBHOOK_SECRET`. It prints the same secret each time on this machine.
 
    ```bash
-   stripe listen --forward-to localhost:4201/crew/webhook --forward-connect-to localhost:4201/crew/webhook
+   npm install -g @stripe/cli   # once
+   stripe login                 # then approve in the browser and run: stripe login --complete-device
+   stripe listen --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,charge.refunded,account.updated \
+     --forward-to localhost:4201/crew/webhook --forward-connect-to localhost:4201/crew/webhook
    ```
 
    When deployed, add a webhook endpoint at `https://studio.model.earth/crew/webhook` with

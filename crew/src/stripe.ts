@@ -1,6 +1,8 @@
 import type { Env } from "./env";
 
 const STRIPE_API = "https://api.stripe.com/v1";
+const STRIPE_API_V2 = "https://api.stripe.com/v2";
+const STRIPE_V2_VERSION = "2026-11-18.endive";
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 type FormValue = string | number | boolean | null | undefined | FormValue[] | { [key: string]: FormValue };
@@ -18,6 +20,27 @@ export async function stripe<T = any>(env: Env, method: "GET" | "POST", path: st
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: method === "POST" ? body : undefined,
+  });
+  const json = await response.json<any>();
+  if (!response.ok) throw new StripeError(json?.error?.message ?? `Stripe request failed: ${response.status}`);
+  return json as T;
+}
+
+/**
+ * Calls Stripe's v2 API (JSON, with a pinned Stripe-Version), used to create connected
+ * accounts: new Connect platforms can't create them with /v1/accounts. The v1 calls above
+ * work with those accounts.
+ */
+export async function stripeV2<T = any>(env: Env, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  if (!env.STRIPE_CREW_SECRET_KEY) throw new StripeError("STRIPE_CREW_SECRET_KEY is not set");
+  const response = await fetch(`${STRIPE_API_V2}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${env.STRIPE_CREW_SECRET_KEY}`,
+      "Content-Type": "application/json",
+      "Stripe-Version": STRIPE_V2_VERSION,
+    },
+    body: method === "POST" && body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await response.json<any>();
   if (!response.ok) throw new StripeError(json?.error?.message ?? `Stripe request failed: ${response.status}`);

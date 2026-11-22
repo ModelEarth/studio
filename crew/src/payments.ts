@@ -1,11 +1,19 @@
 import { basePath, currency, Env, feePercent, platformFeeCents, stripeConfigured } from "./env";
 import { esc, money, page, redirect } from "./html";
 import { issueHeader, IssueRef, loadIssue, parseAmountCents } from "./bids";
+import { bountyTotalHtml } from "./bounties";
 import { stripe } from "./stripe";
 import {
-  CrewMember, getBidWithMember, getMember, getPaymentBySession, hasPendingOrPaidWorkPayment, insertPayment, listBidsForIssue,
-  listPaidPaymentsForIssue, markPaymentPaid, NewPayment, setPaymentCheckoutSession, setPaymentStatus,
+  CrewMember, getBidWithMember, getBounty, getMember, getPaymentBySession, hasPendingOrPaidBountyPayment, hasPendingOrPaidWorkPayment,
+  insertPayment, listBidsForIssue, listBountiesForIssue, listPaidPaymentsForIssue, markPaymentPaid, NewPayment, PaymentKind,
+  setPaymentCheckoutSession, setPaymentStatus,
 } from "./db";
+
+const KIND_LABELS: Record<PaymentKind, string> = { work: "Work", tip: "Tip", bounty: "Bounty" };
+
+export function paymentKindLabel(kind: PaymentKind): string {
+  return KIND_LABELS[kind] ?? kind;
+}
 
 interface CheckoutSession {
   id: string;
@@ -21,8 +29,11 @@ export async function payPage(request: Request, env: Env, user: CrewMember | nul
 
   const base = basePath(env);
   const query = `repo=${encodeURIComponent(ref.repo)}&issue=${ref.issueNumber}`;
-  const bids = await listBidsForIssue(env, ref.repo, ref.issueNumber);
-  const paid = await listPaidPaymentsForIssue(env, ref.repo, ref.issueNumber);
+  const [bids, bounties, paid] = await Promise.all([
+    listBidsForIssue(env, ref.repo, ref.issueNumber),
+    listBountiesForIssue(env, ref.repo, ref.issueNumber),
+    listPaidPaymentsForIssue(env, ref.repo, ref.issueNumber),
+  ]);
   const signIn = `<a href="${base}/login?next=${encodeURIComponent(`${base}/pay?${query}`)}">Sign in with GitHub</a>`;
   const fee = feePercent(env);
   const feeNote = fee > 0 ? `<p class="muted">The site host keeps ${fee}% of each payment; the rest goes to the crew member through Stripe.</p>` : "";
@@ -37,6 +48,22 @@ export async function payPage(request: Request, env: Env, user: CrewMember | nul
     return `<tr><td>@${esc(bid.github_login)}</td><td>${money(bid.amount_cents, bid.currency)}</td>
 <td><span class="status ${esc(bid.status)}">${esc(bid.status)}</span>${bid.delivery_url ? ` <a href="${esc(bid.delivery_url)}" target="_blank" rel="noopener">work</a>` : ""}</td><td>${action}</td></tr>`;
   });
+
+  // A sponsor pays their bounty to a crew member whose bid was accepted, once the work satisfies them.
+  const myBounty = user ? bounties.find((bounty) => bounty.github_id === user.github_id && bounty.status === "open") : undefined;
+  const bountyPayees = [...new Map(
+    workBids.filter((bid) => bid.transfers_active).map((bid) => [bid.github_id, bid]),
+  ).values()];
+  const bountyForm = !myBounty
+    ? ""
+    : bountyPayees.length === 0
+      ? `<p class="muted">Your bounty of ${money(myBounty.amount_cents, myBounty.currency)} can be paid once a crew member's bid is accepted and they've set up payouts.</p>`
+      : `<form method="post" action="${base}/pay/bounty" class="card">
+  <input type="hidden" name="bounty_id" value="${myBounty.id}">
+  <label for="bounty-payee">Pay your bounty to the crew member whose production satisfies you</label>
+  <select id="bounty-payee" name="payee">${bountyPayees.map((bid) => `<option value="${bid.github_id}">@${esc(bid.github_login)}</option>`).join("")}</select>
+  <button>Pay bounty ${money(myBounty.amount_cents, myBounty.currency)}</button>
+</form>`;
 
   const tipCandidates = [...new Map(
     bids.filter((bid) => bid.transfers_active && !["withdrawn", "rejected"].includes(bid.status)).map((bid) => [bid.github_id, bid]),
@@ -57,14 +84,16 @@ export async function payPage(request: Request, env: Env, user: CrewMember | nul
   <button>Send tip</button>
 </form>`;
 
-  const paidRows = paid.map((payment) => `<tr><td>${payment.kind === "work" ? "Work" : "Tip"}</td><td>@${esc(payment.payee_login)}</td>
+  const paidRows = paid.map((payment) => `<tr><td>${paymentKindLabel(payment.kind)}</td><td>@${esc(payment.payee_login)}</td>
 <td>${money(payment.amount_cents, payment.currency)}</td><td>${esc(payment.note ?? "")}</td></tr>`);
 
   const body = `${issueHeader(ref)}
 <p><a href="${base}/bid?${query}">Bids for this issue</a></p>
-${stripeConfigured(env) ? "" : `<div class="notice">Payments aren't set up yet. Add STRIPE_CREW_SECRET_KEY to crew/.env.</div>`}
+${bountyTotalHtml(env, bounties, query)}
+${stripeConfigured(env) ? "" : `<div class="notice">Payments aren't set up yet. Add the crew's Stripe keys to the crew env file (see crew/README.md).</div>`}
 <h2>Pay for work</h2>
 ${workRows.length ? `<div class="table-wrap"><table><thead><tr><th>Crew member</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${workRows.join("")}</tbody></table></div>` : `<p class="muted">No accepted bids yet.</p>`}
+${bountyForm ? `<h2>Your bounty</h2>\n${bountyForm}` : ""}
 <h2>Tips and fees</h2>
 <p class="muted">Support crew members working on this production.</p>
 ${tipForm}
@@ -88,7 +117,7 @@ export async function payForWork(request: Request, env: Env, user: CrewMember | 
     return page(env, "Payment", `<h1>@${esc(bid.github_login)} hasn't set up payouts yet</h1><p><a href="${back}">Back</a></p>`, user, 409);
   }
   return startCheckout(request, env, {
-    kind: "work", bid_id: bid.id, repo: bid.repo, issue_number: bid.issue_number, payer_github_id: user.github_id,
+    kind: "work", bid_id: bid.id, bounty_id: null, repo: bid.repo, issue_number: bid.issue_number, payer_github_id: user.github_id,
     payee_github_id: payee.github_id, amount_cents: bid.amount_cents, platform_fee_cents: platformFeeCents(env, bid.amount_cents),
     currency: bid.currency, note: null,
   }, payee, `Work on ${bid.repo}#${bid.issue_number} by @${bid.github_login}`, back);
@@ -112,10 +141,34 @@ export async function payTip(request: Request, env: Env, user: CrewMember | null
   if (!amount) return page(env, "Payment", `<h1>Enter an amount of at least ${money(100, currency(env))}</h1><p><a href="${back}">Back</a></p>`, user, 400);
 
   return startCheckout(request, env, {
-    kind: "tip", bid_id: null, repo: ref.repo, issue_number: ref.issueNumber, payer_github_id: user.github_id,
+    kind: "tip", bid_id: null, bounty_id: null, repo: ref.repo, issue_number: ref.issueNumber, payer_github_id: user.github_id,
     payee_github_id: payee.github_id, amount_cents: amount, platform_fee_cents: platformFeeCents(env, amount),
     currency: currency(env), note: String(form.get("note") ?? "").trim().slice(0, 200) || null,
   }, payee, `Tip for @${payee.github_login} on ${ref.repo}#${ref.issueNumber}`, back);
+}
+
+export async function payBounty(request: Request, env: Env, user: CrewMember | null): Promise<Response> {
+  const base = basePath(env);
+  if (!user) return redirect(`${base}/login`);
+  const form = await request.formData();
+  const bounty = await getBounty(env, Number(form.get("bounty_id")));
+  if (!bounty || bounty.github_id !== user.github_id) return page(env, "Payment", "<h1>Bounty not found</h1>", user, 404);
+  const back = `${base}/pay?repo=${encodeURIComponent(bounty.repo)}&issue=${bounty.issue_number}`;
+  if (bounty.status !== "open" || await hasPendingOrPaidBountyPayment(env, bounty.id)) {
+    return page(env, "Payment", `<h1>This bounty is already paid or being paid</h1><p><a href="${back}">Back</a></p>`, user, 409);
+  }
+  const payeeId = Number(form.get("payee"));
+  const workedOnIssue = (await listBidsForIssue(env, bounty.repo, bounty.issue_number))
+    .some((bid) => bid.github_id === payeeId && ["accepted", "delivered", "paid"].includes(bid.status));
+  const payee = workedOnIssue ? await getMember(env, payeeId) : null;
+  if (!payee?.stripe_account_id || !payee.transfers_active) {
+    return page(env, "Payment", `<h1>That crew member can't receive this bounty yet</h1><p><a href="${back}">Back</a></p>`, user, 409);
+  }
+  return startCheckout(request, env, {
+    kind: "bounty", bid_id: null, bounty_id: bounty.id, repo: bounty.repo, issue_number: bounty.issue_number, payer_github_id: user.github_id,
+    payee_github_id: payee.github_id, amount_cents: bounty.amount_cents, platform_fee_cents: platformFeeCents(env, bounty.amount_cents),
+    currency: bounty.currency, note: null,
+  }, payee, `Bounty for ${bounty.repo}#${bounty.issue_number}, paid to @${payee.github_login}`, back);
 }
 
 /** Return page after Checkout. Confirms with Stripe too, in case the webhook hasn't arrived. */
@@ -132,7 +185,7 @@ export async function payDone(request: Request, env: Env, user: CrewMember | nul
   const back = `${base}/pay?repo=${encodeURIComponent(payment!.repo)}&issue=${payment!.issue_number}`;
   const done = payment!.status === "paid";
   return page(env, "Payment", `<h1>${done ? "Thank you, payment complete" : "Payment is processing"}</h1>
-<p>${money(payment!.amount_cents, payment!.currency)} ${payment!.kind === "work" ? "for work" : "tip"} on ${esc(payment!.repo)}#${payment!.issue_number}.</p>
+<p>${money(payment!.amount_cents, payment!.currency)} ${({ work: "for work", tip: "tip", bounty: "bounty" } as const)[payment!.kind]} on ${esc(payment!.repo)}#${payment!.issue_number}.</p>
 <p><a href="${back}">Back to the issue</a></p>`, user);
 }
 

@@ -32,10 +32,13 @@ export interface BidWithMember extends Bid {
   transfers_active: number;
 }
 
+export type PaymentKind = "work" | "tip" | "bounty";
+
 export interface Payment {
   id: number;
-  kind: "work" | "tip";
+  kind: PaymentKind;
   bid_id: number | null;
+  bounty_id: number | null;
   repo: string;
   issue_number: number;
   payer_github_id: number | null;
@@ -49,13 +52,34 @@ export interface Payment {
   created_at: string;
 }
 
+export type BountyStatus = "open" | "withdrawn" | "paid";
+
+export interface Bounty {
+  id: number;
+  repo: string;
+  issue_number: number;
+  issue_title: string | null;
+  issue_url: string | null;
+  github_id: number;
+  amount_cents: number;
+  currency: string;
+  note: string | null;
+  status: BountyStatus;
+  created_at: string;
+}
+
+export interface BountyWithSponsor extends Bounty {
+  github_login: string;
+}
+
 export interface PaymentWithPayee extends Payment {
   payee_login: string;
 }
 
 export interface NewPayment {
-  kind: "work" | "tip";
+  kind: PaymentKind;
   bid_id: number | null;
+  bounty_id: number | null;
   repo: string;
   issue_number: number;
   payer_github_id: number;
@@ -147,10 +171,10 @@ export async function setBidStatus(env: Env, bidId: number, status: BidStatus, d
 
 export async function insertPayment(env: Env, payment: NewPayment): Promise<number> {
   const row = await env.DB.prepare(
-    `INSERT INTO crew_payments (kind, bid_id, repo, issue_number, payer_github_id, payee_github_id, amount_cents,
-       platform_fee_cents, currency, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO crew_payments (kind, bid_id, bounty_id, repo, issue_number, payer_github_id, payee_github_id, amount_cents,
+       platform_fee_cents, currency, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
   ).bind(
-    payment.kind, payment.bid_id, payment.repo, payment.issue_number, payment.payer_github_id, payment.payee_github_id,
+    payment.kind, payment.bid_id, payment.bounty_id, payment.repo, payment.issue_number, payment.payer_github_id, payment.payee_github_id,
     payment.amount_cents, payment.platform_fee_cents, payment.currency, payment.note,
   ).first<{ id: number }>();
   if (!row) throw new Error("Payment insert returned no id");
@@ -170,7 +194,7 @@ export async function getPaymentBySession(env: Env, sessionId: string): Promise<
   return env.DB.prepare("SELECT * FROM crew_payments WHERE stripe_checkout_session_id = ?").bind(sessionId).first<Payment>();
 }
 
-/** Marks a checkout paid once; a paid work payment also marks its bid paid. */
+/** Marks a checkout paid once; a paid work payment also marks its bid paid, and a bounty payment its bounty. */
 export async function markPaymentPaid(env: Env, sessionId: string, paymentIntentId: string | null): Promise<void> {
   const payment = await getPaymentBySession(env, sessionId);
   if (!payment || payment.status === "paid") return;
@@ -179,6 +203,9 @@ export async function markPaymentPaid(env: Env, sessionId: string, paymentIntent
   ).bind(paymentIntentId, payment.id).run();
   if (payment.kind === "work" && payment.bid_id) {
     await setBidStatus(env, payment.bid_id, "paid");
+  }
+  if (payment.kind === "bounty" && payment.bounty_id) {
+    await setBountyStatus(env, payment.bounty_id, "paid");
   }
 }
 
@@ -198,6 +225,56 @@ export async function hasPendingOrPaidWorkPayment(env: Env, bidId: number): Prom
      AND (status = 'paid' OR (status = 'pending' AND created_at > datetime('now', '-30 minutes')))`,
   ).bind(bidId).first();
   return !!row;
+}
+
+export async function hasPendingOrPaidBountyPayment(env: Env, bountyId: number): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT 1 AS found FROM crew_payments WHERE bounty_id = ? AND kind = 'bounty'
+     AND (status = 'paid' OR (status = 'pending' AND created_at > datetime('now', '-30 minutes')))`,
+  ).bind(bountyId).first();
+  return !!row;
+}
+
+export async function listBountiesForIssue(env: Env, repo: string, issueNumber: number): Promise<BountyWithSponsor[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT b.*, m.github_login FROM crew_bounties b JOIN crew_members m ON m.github_id = b.github_id
+     WHERE b.repo = ? AND b.issue_number = ? AND b.status IN ('open', 'paid') ORDER BY b.amount_cents DESC, b.created_at`,
+  ).bind(repo, issueNumber).all<BountyWithSponsor>();
+  return results;
+}
+
+export async function listBountiesForSponsor(env: Env, githubId: number): Promise<Bounty[]> {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM crew_bounties WHERE github_id = ? AND status IN ('open', 'paid') ORDER BY updated_at DESC LIMIT 100",
+  ).bind(githubId).all<Bounty>();
+  return results;
+}
+
+export async function getBounty(env: Env, bountyId: number): Promise<Bounty | null> {
+  return env.DB.prepare("SELECT * FROM crew_bounties WHERE id = ?").bind(bountyId).first<Bounty>();
+}
+
+export async function findOpenBounty(env: Env, repo: string, issueNumber: number, githubId: number): Promise<Bounty | null> {
+  return env.DB.prepare("SELECT * FROM crew_bounties WHERE repo = ? AND issue_number = ? AND github_id = ? AND status = 'open'")
+    .bind(repo, issueNumber, githubId).first<Bounty>();
+}
+
+export async function insertBounty(env: Env, bounty: Omit<Bounty, "id" | "status" | "created_at">): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO crew_bounties (repo, issue_number, issue_title, issue_url, github_id, amount_cents, currency, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    bounty.repo, bounty.issue_number, bounty.issue_title, bounty.issue_url, bounty.github_id, bounty.amount_cents, bounty.currency, bounty.note,
+  ).run();
+}
+
+export async function updateBountyOffer(env: Env, bountyId: number, amountCents: number, note: string | null): Promise<void> {
+  await env.DB.prepare("UPDATE crew_bounties SET amount_cents = ?, note = ?, updated_at = datetime('now') WHERE id = ?")
+    .bind(amountCents, note, bountyId).run();
+}
+
+export async function setBountyStatus(env: Env, bountyId: number, status: BountyStatus): Promise<void> {
+  await env.DB.prepare("UPDATE crew_bounties SET status = ?, updated_at = datetime('now') WHERE id = ?").bind(status, bountyId).run();
 }
 
 export async function listPaidPaymentsForIssue(env: Env, repo: string, issueNumber: number): Promise<PaymentWithPayee[]> {

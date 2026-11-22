@@ -1,8 +1,8 @@
 # Crew
 
 Crew members bid on project issues (GitHub issues shown on the projects hub), deliver
-creative work, and get paid through Stripe Connect. People watching a production can also
-send them tips and fees.
+creative work, and get paid through Stripe Connect. Sponsors can offer a bounty for a
+satisfactory production of an issue, and people watching a production can send tips and fees.
 
 Crew is a Cloudflare Worker with a D1 database, deployed at https://studio.model.earth and
 run locally on http://localhost:4201. The one Worker serves the whole site:
@@ -20,11 +20,13 @@ run locally on http://localhost:4201. The one Worker serves the whole site:
 | everything else   | The ArtCraft webapp (Vite on 4202 locally, the built app when deployed) |
 
 Crew uses its own Stripe account, separate from the ArtCraft account in storyteller-web, set by
-`STRIPE_CREW_SECRET_KEY` in the crew env file.
+the `STRIPE_CREW_` keys in the crew env file: live keys for the deployed site, and sandbox keys
+that only localhost uses.
 
 `crew/projects` is the [ModelEarth/projects](https://github.com/ModelEarth/projects) submodule.
-Its hub (`projects/hub/`) shows Bid and Payment links on each issue, on localhost only
-(`class="local"`). On this site they open `/crew` on the same host.
+Its hub (`projects/hub/`) shows Bid, Payment and Bounty buttons on each issue. On this site
+they open `/crew` on the same host; on localhost, `http://localhost:4201/crew`; and on other
+sites that show the hub, `https://studio.model.earth/crew`.
 
 ## How it works
 
@@ -35,7 +37,9 @@ Its hub (`projects/hub/`) shows Bid and Payment links on each issue, on localhos
    them through Stripe onboarding.
 4. When work is delivered, the crew member adds a link (such as the pull request).
 5. On the **Payment** page, a signed-in user pays the accepted bid, or sends a tip to any crew
-   member on that issue. Stripe Checkout takes the payment, keeps `CREW_PLATFORM_FEE_PERCENT`
+   member on that issue. A sponsor who offered a bounty (**Bounty** page: the amount, and what
+   a satisfactory production includes) pays it to a crew member whose bid was accepted, once
+   the work satisfies them. Stripe Checkout takes the payment, keeps `CREW_PLATFORM_FEE_PERCENT`
    for the site host, and sends the rest to the crew member's Stripe account.
 6. Stripe's webhook marks payments paid, failed, expired or refunded, and tracks whether each
    crew member can receive payments.
@@ -60,10 +64,23 @@ Without a GitHub OAuth app, set `CREW_DEV_LOGIN=true` and sign in on localhost w
 
 ### Stripe (second account)
 
-1. In the crew Stripe account, turn on **Connect** (Express accounts).
-2. Put the test secret key in `STRIPE_CREW_SECRET_KEY`.
-3. Forward webhooks locally with the Stripe CLI, and put the `whsec_...` it prints in
-   `STRIPE_CREW_WEBHOOK_SECRET`. It prints the same secret each time on this machine.
+The crew env file holds two sets of keys from the crew Stripe account:
+
+| Keys                                                                   | Used by                       |
+|------------------------------------------------------------------------|-------------------------------|
+| `STRIPE_CREW_SECRET_KEY`, `STRIPE_CREW_WEBHOOK_SECRET`                 | The deployed site (live mode) |
+| `STRIPE_CREW_SANDBOX_SECRET_KEY`, `STRIPE_CREW_SANDBOX_WEBHOOK_SECRET` | Localhost only (a sandbox)    |
+
+Localhost never uses the live keys, so local testing can't take real payments, and
+`npm run deploy` never uploads the sandbox keys. Crew only needs secret keys
+(`sk_live_...`, `sk_test_...`), not the publishable ones.
+
+**Sandbox, for localhost**
+
+1. In a sandbox of the crew account, turn on **Connect** (Express accounts), then put its
+   secret key in `STRIPE_CREW_SANDBOX_SECRET_KEY`.
+2. Forward webhooks locally with the Stripe CLI, and put the `whsec_...` it prints in
+   `STRIPE_CREW_SANDBOX_WEBHOOK_SECRET`. It prints the same secret each time on this machine.
 
    ```bash
    npm install -g @stripe/cli   # once
@@ -72,17 +89,39 @@ Without a GitHub OAuth app, set `CREW_DEV_LOGIN=true` and sign in on localhost w
      --forward-to localhost:4201/crew/webhook --forward-connect-to localhost:4201/crew/webhook
    ```
 
-   When deployed, add a webhook endpoint at `https://studio.model.earth/crew/webhook` with
-   "Listen to events on connected accounts" turned on, for these events:
-   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
-   `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`,
-   `account.updated`.
+**Live, for the deployed site**
+
+1. In live mode, turn on **Connect** and complete the account's activation, then put the live
+   secret key in `STRIPE_CREW_SECRET_KEY`.
+2. Under **Developers > Webhooks**, add two event destinations, both at
+   `https://studio.model.earth/crew/webhook`:
+   - **Your account**: `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+     `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`
+   - **Connected accounts**: `account.updated`
+3. Put both signing secrets in `STRIPE_CREW_WEBHOOK_SECRET`, comma-separated, and run
+   `npm run deploy`. `npm run check` says whether both live values are set.
 
 ### GitHub sign-in
 
-Create a GitHub OAuth app with callback URL `http://localhost:4201/crew/auth/callback`
-(and another for `https://studio.model.earth/crew/auth/callback`), and put its ID and secret
-in `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+Create a GitHub OAuth app for each site under **GitHub > Settings > Developer settings >
+OAuth Apps > New OAuth App** (the GitHub CLI and API can't create OAuth apps). Its redirect
+(callback) URL is the site's `/crew/auth/callback`. Leave wildcard matching and Device Flow off.
+
+The crew env file can hold several apps. Give each a name in its keys, and list its hosts:
+
+| Key                           | Value                                            |
+| ----------------------------- | ------------------------------------------------ |
+| `GITHUB_<NAME>_NAME`          | The app's GitHub application name (optional)     |
+| `GITHUB_<NAME>_HOST`          | Its hosts, comma-separated: `studio.model.earth` |
+| `GITHUB_<NAME>_CLIENT_ID`     | The app's client ID                              |
+| `GITHUB_<NAME>_CLIENT_SECRET` | A client secret generated for the app            |
+
+For example `GITHUB_EARTH_1_*` for `studio.model.earth` (named "Model.Earth Studio"),
+`GITHUB_CREW_1_*` for `crew.dreamstudio.com` and `GITHUB_LOCAL_1_*` for `localhost:4201`
+(callback `http://localhost:4201/crew/auth/callback`). Each request uses the app named for its
+host, and hosts without one use `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+`npm run deploy` doesn't upload apps whose hosts are all localhost, and `npm run check` says
+whether the deployed site has an app.
 
 ## Deploy to Cloudflare
 
@@ -102,7 +141,8 @@ Workers Scripts, D1 and Workers custom domain (model.earth zone) edit access. Th
 2. Applies `migrations/` to it.
 3. Builds the webapp, and copies it with `projects` and `localsite` into `./site` (not committed).
 4. Deploys with every set value in the crew env file as a Worker secret, except
-   `CREW_DEV_LOGIN` and the `vars` in `wrangler.jsonc`.
+   `CREW_DEV_LOGIN`, the Stripe sandbox keys, localhost-only GitHub apps and the `vars` in
+   `wrangler.jsonc`.
 5. Attaches `studio.model.earth` (a custom domain, so Cloudflare adds its DNS record and
    certificate) and checks `/crew/health`.
 
@@ -188,18 +228,22 @@ changes below.
 
 ## Pages
 
-| Path                     | Method | What it does                                        |
-|--------------------------|--------|-----------------------------------------------------|
-| `/crew/`                 | GET    | Your bids and payments; bids to review for admins   |
-| `/crew/bid?repo=&issue=` | GET    | Bids on an issue and the bid form                   |
-| `/crew/bid`              | POST   | Place or update your open bid                       |
-| `/crew/bid/:id/:action`  | POST   | Accept/reject (admins), withdraw/deliver (bidder)   |
-| `/crew/pay?repo=&issue=` | GET    | Pay accepted bids, send tips, see what was received |
-| `/crew/pay/work`         | POST   | Stripe Checkout for an accepted bid                 |
-| `/crew/pay/tip`          | POST   | Stripe Checkout for a tip or fee                    |
-| `/crew/connect`          | GET    | Payout setup status                                 |
-| `/crew/health`           | GET    | Returns ok                                          |
-| `/crew/webhook`          | POST   | Stripe webhook (signed)                             |
+| Path                        | Method | What it does                                        |
+|-----------------------------|--------|-----------------------------------------------------|
+| `/crew/`                    | GET    | Your bids and payments; bids to review for admins   |
+| `/crew/bid?repo=&issue=`    | GET    | Bids on an issue and the bid form                   |
+| `/crew/bid`                 | POST   | Place or update your open bid                       |
+| `/crew/bid/:id/:action`     | POST   | Accept/reject (admins), withdraw/deliver (bidder)   |
+| `/crew/bounty?repo=&issue=` | GET    | Bounties offered for the issue and the bounty form  |
+| `/crew/bounty`              | POST   | Offer or update your open bounty                    |
+| `/crew/bounty/:id/withdraw` | POST   | Withdraw your open bounty                           |
+| `/crew/pay?repo=&issue=`    | GET    | Pay accepted bids, send tips, see what was received |
+| `/crew/pay/work`            | POST   | Stripe Checkout for an accepted bid                 |
+| `/crew/pay/tip`             | POST   | Stripe Checkout for a tip or fee                    |
+| `/crew/pay/bounty`          | POST   | Stripe Checkout for your bounty                     |
+| `/crew/connect`             | GET    | Payout setup status                                 |
+| `/crew/health`              | GET    | Returns ok                                          |
+| `/crew/webhook`             | POST   | Stripe webhook (signed)                             |
 
-Tables are in `migrations/0001_crew.sql`: `crew_members`, `crew_sessions`, `crew_bids`,
+Tables are in `migrations/`: `crew_members`, `crew_sessions`, `crew_bids`, `crew_bounties`,
 `crew_payments` and `crew_stripe_events`.

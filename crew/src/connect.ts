@@ -14,7 +14,7 @@ export async function connectPage(request: Request, env: Env, user: CrewMember |
   const base = basePath(env);
   if (!user) return redirect(`${base}/login?next=${encodeURIComponent(`${base}/connect`)}`);
   if (!stripeConfigured(env)) {
-    return page(env, "Payouts", `<h1>Payouts</h1><div class="notice">Payouts aren't set up yet. Add STRIPE_CREW_SECRET_KEY to crew/.env.</div>`, user, 503);
+    return page(env, "Payouts", `<h1>Payouts</h1><div class="notice">Payouts aren't set up yet. Add the crew's Stripe keys to the crew env file (see crew/README.md).</div>`, user, 503);
   }
   let status: string;
   if (user.transfers_active) {

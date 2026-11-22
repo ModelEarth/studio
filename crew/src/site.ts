@@ -1,4 +1,4 @@
-import { basePath, Env } from "./env";
+import { basePath, Env, isLocalhost } from "./env";
 import siteFolders from "../site-folders.json";
 
 // Submodules served as static files at the site root (/engine/, /projects/, ...),
@@ -213,8 +213,4 @@ function accountsOrigin(env: Env): string | null {
   } catch {
     return null;
   }
-}
-
-function isLocalhost(url: URL): boolean {
-  return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
 }

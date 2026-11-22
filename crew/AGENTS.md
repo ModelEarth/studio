@@ -50,8 +50,8 @@ machine's `paths.yaml` can differ.
 
 From the crew folder, `npm run deploy` publishes https://studio.model.earth. It creates the D1
 database on the first run, applies its migrations, builds the webapp, assembles `crew/site`,
-uploads the crew settings as Worker secrets (not `CREW_DEV_LOGIN`), and attaches the custom
-domain. `npm run check` is read-only and lists what a deploy still needs.
+uploads the crew settings as Worker secrets (not `CREW_DEV_LOGIN` or the Stripe sandbox keys),
+and attaches the custom domain. `npm run check` is read-only and lists what a deploy still needs.
 A deploy publishes the live site, so confirm with the user before running it.
 Details are in `crew/README.md`.
 

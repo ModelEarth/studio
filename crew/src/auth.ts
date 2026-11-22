@@ -8,7 +8,7 @@ const STATE_COOKIE = "crew_oauth_state";
 
 export async function login(request: Request, env: Env): Promise<Response> {
   if (!githubConfigured(env)) {
-    return page(env, "Sign in", `<h1>Sign in</h1><div class="notice">GitHub sign-in isn't set up yet. Add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to crew/.env.</div>`, null, 503);
+    return page(env, "Sign in", `<h1>Sign in</h1><div class="notice">GitHub sign-in isn't set up for this site yet. Add a GitHub OAuth app for it to the crew env file (see "GitHub sign-in" in crew/README.md).</div>`, null, 503);
   }
   const url = new URL(request.url);
   const state = randomToken(16);

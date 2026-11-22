@@ -1,8 +1,10 @@
 import { basePath, currency, Env, isAdmin, ownerAllowed } from "./env";
 import { fetchIssue, GitHubIssue, parseIssueNumber, parseRepo } from "./github";
 import { esc, money, page, redirect } from "./html";
+import { bountyTotalHtml } from "./bounties";
 import {
-  BidStatus, BidWithMember, CrewMember, findOpenBid, getBidWithMember, insertBid, listBidsForIssue, setBidStatus, updateBidOffer,
+  BidStatus, BidWithMember, CrewMember, findOpenBid, getBidWithMember, insertBid, listBidsForIssue, listBountiesForIssue, setBidStatus,
+  updateBidOffer,
 } from "./db";
 
 export const MIN_AMOUNT_CENTS = 100;
@@ -66,6 +68,7 @@ export async function bidPage(request: Request, env: Env, user: CrewMember | nul
   const body = `${issueHeader(ref)}
 ${notice ? `<div class="notice">${esc(notice)}</div>` : ""}
 <p><a href="${base}/pay?${query}">Payments and tips for this issue</a></p>
+${bountyTotalHtml(env, await listBountiesForIssue(env, ref.repo, ref.issueNumber), query)}
 <h2>Bids</h2>
 ${bids.length ? bidTable(env, bids, user) : `<p class="muted">No bids yet.</p>`}
 ${form}`;
@@ -83,7 +86,7 @@ export async function submitBid(request: Request, env: Env, user: CrewMember | n
 
   const amount = parseAmountCents(form.get("amount"));
   if (!amount) {
-    return bidPage(new Request(`${new URL(request.url).origin}${back}`, request), env, user,
+    return bidPage(new Request(`${new URL(request.url).origin}${back}`), env, user,
       `Enter an amount from ${money(MIN_AMOUNT_CENTS, currency(env))} to ${money(MAX_AMOUNT_CENTS, currency(env))}.`);
   }
   const message = String(form.get("message") ?? "").trim().slice(0, 2000) || null;

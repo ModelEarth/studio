@@ -8,11 +8,18 @@ interface StripeEvent {
   data: { object: any };
 }
 
-/** Stripe webhook for the crew account, including Connect events for crew members' accounts. */
+/**
+ * Stripe webhook for the crew account, including Connect events for crew members' accounts.
+ * STRIPE_CREW_WEBHOOK_SECRET can list several signing secrets, comma-separated, since Stripe
+ * sends the account's events and the connected accounts' events from separate endpoints.
+ */
 export async function stripeWebhook(request: Request, env: Env): Promise<Response> {
   if (!env.STRIPE_CREW_WEBHOOK_SECRET) return json({ error: "STRIPE_CREW_WEBHOOK_SECRET is not set" }, 503);
   const payload = await request.text();
-  const valid = await verifyStripeSignature(payload, request.headers.get("Stripe-Signature"), env.STRIPE_CREW_WEBHOOK_SECRET);
+  const signature = request.headers.get("Stripe-Signature");
+  const secrets = env.STRIPE_CREW_WEBHOOK_SECRET.split(",").map((secret) => secret.trim()).filter(Boolean);
+  let valid = false;
+  for (const secret of secrets) valid ||= await verifyStripeSignature(payload, signature, secret);
   if (!valid) return json({ error: "Invalid signature" }, 400);
 
   const event = JSON.parse(payload) as StripeEvent;

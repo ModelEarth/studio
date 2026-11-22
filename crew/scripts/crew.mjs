@@ -30,8 +30,14 @@ const SITE_FOLDERS = { ...Object.fromEntries(SUBMODULES.map((folder) => [folder,
 const ASSETS_IGNORE = join(CREW_DIR, "site.assetsignore");
 const WEBAPP_DEV_ORIGIN = `http://127.0.0.1:${process.env.WEBAPP_DEV_PORT || 4202}`;
 const PLACEHOLDER_DATABASE_ID = "00000000-0000-0000-0000-000000000000";
-// Never uploaded: local-only settings, and the deploy credentials themselves.
-const LOCAL_ONLY_KEYS = ["CREW_DEV_LOGIN", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"];
+// Never uploaded: local-only settings (including the Stripe sandbox keys, which only
+// localhost uses), and the deploy credentials themselves.
+const LOCAL_ONLY_KEYS = [
+  "CREW_DEV_LOGIN", "STRIPE_CREW_SANDBOX_SECRET_KEY", "STRIPE_CREW_SANDBOX_WEBHOOK_SECRET",
+  "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID",
+];
+
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
 const [command, ...args] = process.argv.slice(2);
 const option = (name) => {
@@ -117,11 +123,16 @@ async function check() {
   const admins = readEnv(crewEnvFile, "CREW_ADMIN_GITHUB_LOGINS");
   report(!!admins && !/\bcrew-admin\b/.test(admins), "CREW_ADMIN_GITHUB_LOGINS lists real GitHub logins",
     `In ${crewEnvFile}, set it to the GitHub logins that accept bids (crew-admin is the local test user).`);
-  report(!!readEnv(crewEnvFile, "GITHUB_CLIENT_ID") && !!readEnv(crewEnvFile, "GITHUB_CLIENT_SECRET"),
-    "GitHub sign-in (optional to deploy; without it nobody can sign in)",
-    `Create a GitHub OAuth app with callback https://${domain}/crew/auth/callback and set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.`);
-  report(!!readEnv(crewEnvFile, "STRIPE_CREW_SECRET_KEY"), "Stripe (optional to deploy; without it payments are off)",
-    "Set STRIPE_CREW_SECRET_KEY, and STRIPE_CREW_WEBHOOK_SECRET from a webhook endpoint at " + `https://${domain}/crew/webhook.`);
+  const app = githubApps(crewEnvFile).find((named) => named.ready && named.hosts.includes(domain));
+  const fallbackApp = !!readEnv(crewEnvFile, "GITHUB_CLIENT_ID") && !!readEnv(crewEnvFile, "GITHUB_CLIENT_SECRET");
+  report(!!app || fallbackApp,
+    `GitHub sign-in${app ? ` (${app.title ? `"${app.title}", ` : ""}GITHUB_${app.name}_ keys)` : ""} (optional to deploy; without it nobody can sign in)`,
+    `Create a GitHub OAuth app with callback https://${domain}/crew/auth/callback, then set GITHUB_<NAME>_HOST=${domain}, GITHUB_<NAME>_CLIENT_ID and GITHUB_<NAME>_CLIENT_SECRET (see crew/README.md).`);
+  const liveKey = readEnv(crewEnvFile, "STRIPE_CREW_SECRET_KEY") ?? "";
+  report(/^(sk|rk)_live_/.test(liveKey), "Live Stripe key (optional to deploy; without it payments are off)",
+    `Set STRIPE_CREW_SECRET_KEY to the crew account's live secret key (sk_live_...). Sandbox keys go in STRIPE_CREW_SANDBOX_SECRET_KEY, for localhost only.`);
+  report(/^whsec_/.test(readEnv(crewEnvFile, "STRIPE_CREW_WEBHOOK_SECRET") ?? ""), "Live Stripe webhook secrets",
+    `Set STRIPE_CREW_WEBHOOK_SECRET to the signing secrets, comma-separated, of the live webhook endpoints at https://${domain}/crew/webhook (see crew/README.md).`);
 
   console.log(`Deploy check for ${domain}\n\n${results.join("\n")}`);
   console.log(`\nWhen the Cloudflare and admin lines are ok, run: npm run deploy`);
@@ -211,17 +222,37 @@ function ensureDatabase(env) {
   console.log(`D1 database ${name}: ${id} (saved in wrangler.jsonc)`);
 }
 
-// Every set KEY= in the crew env file, minus local-only keys and the vars in wrangler.jsonc.
+// Every set KEY= in the crew env file, minus local-only keys (including GitHub apps
+// only for localhost) and the vars in wrangler.jsonc.
 function workerSecrets(envFile) {
   const vars = Object.keys(JSON.parse(readConfig().match(/"vars":\s*(\{[^}]*\})/)?.[1] ?? "{}"));
-  const keys = new Set(readFileSync(envFile, "utf8").split("\n").map((line) => line.match(/^([A-Z][A-Z0-9_]*)=/)?.[1]).filter(Boolean));
+  const localOnly = new Set(LOCAL_ONLY_KEYS);
+  for (const app of githubApps(envFile)) {
+    if (app.hosts.length && app.hosts.every((host) => LOCAL_HOST.test(host))) app.keys.forEach((key) => localOnly.add(key));
+  }
   const secrets = {};
-  for (const key of keys) {
-    if (LOCAL_ONLY_KEYS.includes(key) || vars.includes(key)) continue;
+  for (const key of envKeys(envFile)) {
+    if (localOnly.has(key) || vars.includes(key)) continue;
     const value = readEnv(envFile, key);
     if (value) secrets[key] = value;
   }
   return secrets;
+}
+
+// The GitHub OAuth apps named in the crew env file: GITHUB_<NAME>_NAME (application name),
+// GITHUB_<NAME>_HOST (comma-separated hosts), GITHUB_<NAME>_CLIENT_ID and GITHUB_<NAME>_CLIENT_SECRET.
+function githubApps(envFile) {
+  return envKeys(envFile).map((key) => key.match(/^GITHUB_(.+)_HOST$/)?.[1]).filter(Boolean).map((name) => ({
+    name,
+    title: readEnv(envFile, `GITHUB_${name}_NAME`),
+    hosts: (readEnv(envFile, `GITHUB_${name}_HOST`) ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean),
+    keys: [`GITHUB_${name}_NAME`, `GITHUB_${name}_HOST`, `GITHUB_${name}_CLIENT_ID`, `GITHUB_${name}_CLIENT_SECRET`],
+    ready: !!readEnv(envFile, `GITHUB_${name}_CLIENT_ID`) && !!readEnv(envFile, `GITHUB_${name}_CLIENT_SECRET`),
+  }));
+}
+
+function envKeys(envFile) {
+  return [...new Set(readFileSync(envFile, "utf8").split("\n").map((line) => line.match(/^([A-Z][A-Z0-9_]*)=/)?.[1]).filter(Boolean))];
 }
 
 async function checkLive(url) {
